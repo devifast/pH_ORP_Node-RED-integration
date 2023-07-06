@@ -1,0 +1,1354 @@
+[
+    {
+        "id": "73e1e8fa540bc19c",
+        "type": "tab",
+        "label": "pH calibration",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "70422f7975bcb30e",
+        "type": "comment",
+        "z": "73e1e8fa540bc19c",
+        "name": "Click BEFORE taking probe out of tank",
+        "info": "",
+        "x": 190,
+        "y": 50,
+        "wires": []
+    },
+    {
+        "id": "59681f8fd3add241",
+        "type": "persist in",
+        "z": "73e1e8fa540bc19c",
+        "name": "pH_slope",
+        "storageNode": "de2a452915cb991c",
+        "x": 560,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "aa76023d270bbd83",
+        "type": "debug",
+        "z": "73e1e8fa540bc19c",
+        "name": "debug 4",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 450,
+        "y": 410,
+        "wires": []
+    },
+    {
+        "id": "b8c5464eb05678cb",
+        "type": "mqtt in",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "pHmV",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10295cfb90f2e367",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 320,
+        "y": 400,
+        "wires": [
+            [
+                "aa76023d270bbd83",
+                "fb5bc4511408dafe"
+            ]
+        ]
+    },
+    {
+        "id": "b86ceaa3d5b4a6be",
+        "type": "mqtt out",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "pH/add",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "10295cfb90f2e367",
+        "x": 250,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "20508254ecb27ac5",
+        "type": "inject",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "on",
+        "payloadType": "str",
+        "x": 110,
+        "y": 800,
+        "wires": [
+            [
+                "b86ceaa3d5b4a6be"
+            ]
+        ]
+    },
+    {
+        "id": "cd7be1611814e1f5",
+        "type": "inject",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "off",
+        "payloadType": "str",
+        "x": 110,
+        "y": 840,
+        "wires": [
+            [
+                "b86ceaa3d5b4a6be"
+            ]
+        ]
+    },
+    {
+        "id": "d5763d1735a163ce",
+        "type": "function",
+        "z": "73e1e8fa540bc19c",
+        "name": "Set pH Calibration Mode",
+        "func": "context.global.pHCalibrationMode = 1;\nreturn {payload: 'Please place pH meter in ph7 solution and then click \"pH7\"'};\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 360,
+        "y": 100,
+        "wires": [
+            [
+                "6f026f4c893c2502"
+            ]
+        ]
+    },
+    {
+        "id": "8b4f8dc35e70eb90",
+        "type": "function",
+        "z": "73e1e8fa540bc19c",
+        "name": "Calibration Routine",
+        "func": "if (!context.global.pHCalibrationMode) {\n\tif (msg.topic !== 'pHmV') {\n\t\treturn {payload: 'Start by clicking \"Start Calibration\"'};\n\t}\n\treturn null;\n}\nif (msg.topic !== 'pHmV') {\n\t// user has clicked pH7 or pH4.\n\tif (msg.topic === 'pH4' && !context.pH7) {\n\t\tif (context.calSol === 'pH7') {\n\t\t\treturn {payload: 'Please allow pH7 calibration to finish'};\n\t\t}\n\t\treturn {payload: 'Please calibrate for pH7 first'};\n\t}\n\tcontext.calSol = msg.topic;\n\tcontext.readings = [];\n\treturn {payload: 'Calibrating for '+context.calSol+' buffer. This will take a few minutes'};\n}\n// at this point we know that we are in calibration\n// mode and that the topic is pHmV\nif (context.calSol) {\n\t// we are calibrating for a particular buffer\n\tif (context.readings.length < 4) {\n\t\tcontext.readings.push(parseFloat(msg.payload));\n\t\tif (context.readings.length < 4) {\n\t\t\treturn {payload: 'Still calibrating ...'};\n\t\t}\n\t}\n\t// we have 4 readings - ignore first and average\n\tvar sum = context.readings[1] + context.readings[2] + context.readings[3];\n\tvar avg = (sum/3).toFixed(1);\n\tif (context.calSol === 'pH7') {\n\t\t// save value and prompt for next action\n\t\tcontext.pH7 = avg;\n\t\tcontext.calSol = null;\n\t\treturn {payload: 'Reading for pH7 is '+avg+'mV. Please place probe in pH4 buffer and click \"pH4\"'};\n\t}\t\n\tif (context.calSol === 'pH4') {\n\t\t// calculate the slope and save to DB\n\t\tcontext.pH4 = avg;\n\t\tcontext.calSol = null;\n\t\tvar pHSlope = -((context.pH7 - context.pH4) / 2.86).toFixed(1);\n\t\tvar pH7Cal = context.pH7;\n\t\t// prompt for user\n\t\tvar payload1 = 'Reading for pH4 is '+avg+'mV. Please put probe back in tank and click \"Stop calibration\"';\n\t\t//var payload2 = { 'pH7Cal': pH7Cal, 'pHSlope': pHSlope };\n\t\t//var payload2 = {\"pHSlope\" : pHSlope };\n\t\tvar payload2 = Number(pHSlope);\n\t\treturn [{ payload: payload1 }, { payload: payload2 }];\n\t}\n}\n//var test = ((msg.payload / 59.16) * 100).toFixed(0);\n//msg.payload = real_pH;\n//msg.payload = Number(msg.payload.toFixed(1));",
+        "outputs": "2",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 180,
+        "wires": [
+            [
+                "6f026f4c893c2502"
+            ],
+            [
+                "59681f8fd3add241",
+                "2374871195384f9f"
+            ]
+        ]
+    },
+    {
+        "id": "d2a45e76d3f9d772",
+        "type": "function",
+        "z": "73e1e8fa540bc19c",
+        "name": "Unset pH Calibration Mode",
+        "func": "context.global.pHCalibrationMode = 0;\nreturn {payload: 'Sensor calibrated'};\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 140,
+        "wires": [
+            [
+                "6f026f4c893c2502"
+            ]
+        ]
+    },
+    {
+        "id": "6f026f4c893c2502",
+        "type": "ui_text",
+        "z": "73e1e8fa540bc19c",
+        "group": "c3b6a787232e1a45",
+        "order": 5,
+        "width": "6",
+        "height": "1",
+        "name": "",
+        "label": "",
+        "format": "{{msg.payload}}",
+        "layout": "col-center",
+        "className": "",
+        "x": 550,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "092118232a8296a3",
+        "type": "ui_button",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "group": "c3b6a787232e1a45",
+        "order": 9,
+        "width": 0,
+        "height": 0,
+        "passthru": true,
+        "label": "Stop calibrating",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "",
+        "payloadType": "date",
+        "topic": "",
+        "topicType": "str",
+        "x": 130,
+        "y": 140,
+        "wires": [
+            [
+                "d2a45e76d3f9d772"
+            ]
+        ]
+    },
+    {
+        "id": "fb5bc4511408dafe",
+        "type": "join",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "mode": "custom",
+        "build": "object",
+        "property": "payload",
+        "propertyType": "msg",
+        "key": "topic",
+        "joiner": "\\n",
+        "joinerType": "str",
+        "accumulate": true,
+        "timeout": "",
+        "count": "2",
+        "reduceRight": false,
+        "reduceExp": "",
+        "reduceInit": "",
+        "reduceInitType": "",
+        "reduceFixup": "",
+        "x": 430,
+        "y": 450,
+        "wires": [
+            [
+                "7a4b3b993452c08a"
+            ]
+        ]
+    },
+    {
+        "id": "7a4b3b993452c08a",
+        "type": "function",
+        "z": "73e1e8fa540bc19c",
+        "name": "function 3",
+        "func": "//\nvar pHSlope = msg.payload.hello;\nvar current = msg.payload.pHmV;\nvar real_pH = 7 - (current / pHSlope);\nmsg.topic = \"pH\";\nmsg.payload = real_pH;\nmsg.payload = Number(msg.payload.toFixed(1));\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 560,
+        "y": 450,
+        "wires": [
+            [
+                "c198e7ecc29d1913",
+                "078ac106f4282203",
+                "3f96b43f3e78b831",
+                "7d37dc8f07c7e440",
+                "d433915cb07f4ea2"
+            ]
+        ]
+    },
+    {
+        "id": "0b291b3c25953713",
+        "type": "persist out",
+        "z": "73e1e8fa540bc19c",
+        "name": "pH_slope",
+        "storageNode": "de2a452915cb991c",
+        "x": 130,
+        "y": 450,
+        "wires": [
+            [
+                "f7775a91067e6941",
+                "e9ba283be3ac01c0"
+            ]
+        ]
+    },
+    {
+        "id": "f7775a91067e6941",
+        "type": "change",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "hello",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 290,
+        "y": 450,
+        "wires": [
+            [
+                "fb5bc4511408dafe"
+            ]
+        ]
+    },
+    {
+        "id": "2374871195384f9f",
+        "type": "link out",
+        "z": "73e1e8fa540bc19c",
+        "name": "link out 1",
+        "mode": "link",
+        "links": [
+            "03ed5298d73c6513"
+        ],
+        "x": 505,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "03ed5298d73c6513",
+        "type": "link in",
+        "z": "73e1e8fa540bc19c",
+        "name": "link in 1",
+        "links": [
+            "2374871195384f9f"
+        ],
+        "x": 175,
+        "y": 410,
+        "wires": [
+            [
+                "f7775a91067e6941"
+            ]
+        ]
+    },
+    {
+        "id": "0d1b9970699ecc79",
+        "type": "ui_dropdown",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "label": "Set pH",
+        "tooltip": "",
+        "place": "Select option",
+        "group": "c3b6a787232e1a45",
+        "order": 2,
+        "width": "6",
+        "height": "1",
+        "passthru": true,
+        "multiple": false,
+        "options": [
+            {
+                "label": "",
+                "value": 7,
+                "type": "num"
+            },
+            {
+                "label": "",
+                "value": 7.2,
+                "type": "num"
+            },
+            {
+                "label": "",
+                "value": 7.4,
+                "type": "num"
+            },
+            {
+                "label": "",
+                "value": 7.6,
+                "type": "num"
+            },
+            {
+                "label": "",
+                "value": 7.8,
+                "type": "num"
+            },
+            {
+                "label": "",
+                "value": 8,
+                "type": "num"
+            }
+        ],
+        "payload": "",
+        "topic": "set_ph",
+        "topicType": "str",
+        "className": "",
+        "x": 570,
+        "y": 490,
+        "wires": [
+            [
+                "c198e7ecc29d1913",
+                "956f404fe954c113"
+            ]
+        ]
+    },
+    {
+        "id": "fc27b81ebe6a951a",
+        "type": "ui_dropdown",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "label": "pH plus/minus",
+        "tooltip": "",
+        "place": "Select option",
+        "group": "c3b6a787232e1a45",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "passthru": true,
+        "multiple": false,
+        "options": [
+            {
+                "label": "",
+                "value": "pH plus",
+                "type": "str"
+            },
+            {
+                "label": "",
+                "value": "pH minus",
+                "type": "str"
+            }
+        ],
+        "payload": "",
+        "topic": "ph_dir",
+        "topicType": "str",
+        "className": "",
+        "x": 580,
+        "y": 590,
+        "wires": [
+            [
+                "2a8b0f413379e2c8"
+            ]
+        ]
+    },
+    {
+        "id": "10974bfbc15c96a8",
+        "type": "ui_text",
+        "z": "73e1e8fa540bc19c",
+        "group": "c3b6a787232e1a45",
+        "order": 4,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Sensor quality between 85-105%",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "x": 480,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "ebad0e7368c93c3a",
+        "type": "function",
+        "z": "73e1e8fa540bc19c",
+        "name": "function 4",
+        "func": "var setpoint = msg.payload.set_ph;\nvar hysteresis = 0.1;\nvar current_pH = msg.payload.pH;\n\nif (current_pH >= (setpoint + hysteresis)) {\n    msg.payload = \"on\";\n} else if (current_pH <= (setpoint - hysteresis)) {\n    msg.payload = \"off\";\n} else {\n    msg.payload = \"nothing\";\n}\nmsg.topic = \"test test\";\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 830,
+        "y": 450,
+        "wires": [
+            [
+                "7b8673081a7353ef"
+            ]
+        ]
+    },
+    {
+        "id": "e9ba283be3ac01c0",
+        "type": "function",
+        "z": "73e1e8fa540bc19c",
+        "name": "function 5",
+        "func": "var test = ((msg.payload / 57.14) * 100).toFixed(0);\nmsg.payload = test;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 270,
+        "y": 490,
+        "wires": [
+            [
+                "10974bfbc15c96a8"
+            ]
+        ]
+    },
+    {
+        "id": "c198e7ecc29d1913",
+        "type": "join",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "mode": "custom",
+        "build": "object",
+        "property": "payload",
+        "propertyType": "msg",
+        "key": "topic",
+        "joiner": "\\n",
+        "joinerType": "str",
+        "accumulate": true,
+        "timeout": "",
+        "count": "2",
+        "reduceRight": false,
+        "reduceExp": "",
+        "reduceInit": "",
+        "reduceInitType": "",
+        "reduceFixup": "",
+        "x": 700,
+        "y": 450,
+        "wires": [
+            [
+                "ebad0e7368c93c3a"
+            ]
+        ]
+    },
+    {
+        "id": "2a8b0f413379e2c8",
+        "type": "persist in",
+        "z": "73e1e8fa540bc19c",
+        "name": "pH_plus/minus",
+        "storageNode": "de2a452915cb991c",
+        "x": 760,
+        "y": 590,
+        "wires": []
+    },
+    {
+        "id": "32de57ab9e01cd14",
+        "type": "persist out",
+        "z": "73e1e8fa540bc19c",
+        "name": "pH_plus/minus",
+        "storageNode": "de2a452915cb991c",
+        "x": 400,
+        "y": 590,
+        "wires": [
+            [
+                "fc27b81ebe6a951a"
+            ]
+        ]
+    },
+    {
+        "id": "956f404fe954c113",
+        "type": "persist in",
+        "z": "73e1e8fa540bc19c",
+        "name": "Set_pH",
+        "storageNode": "de2a452915cb991c",
+        "x": 710,
+        "y": 530,
+        "wires": []
+    },
+    {
+        "id": "111c3dc95543c0e4",
+        "type": "persist out",
+        "z": "73e1e8fa540bc19c",
+        "name": "Set_pH",
+        "storageNode": "de2a452915cb991c",
+        "x": 440,
+        "y": 490,
+        "wires": [
+            [
+                "0d1b9970699ecc79"
+            ]
+        ]
+    },
+    {
+        "id": "7b8673081a7353ef",
+        "type": "debug",
+        "z": "73e1e8fa540bc19c",
+        "name": "debug 11",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 970,
+        "y": 450,
+        "wires": []
+    },
+    {
+        "id": "2a7fbaabd74b2346",
+        "type": "ui_button",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "group": "c3b6a787232e1a45",
+        "order": 6,
+        "width": 0,
+        "height": 0,
+        "passthru": true,
+        "label": "Start calibrating",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "",
+        "payloadType": "str",
+        "topic": "topic",
+        "topicType": "msg",
+        "x": 130,
+        "y": 100,
+        "wires": [
+            [
+                "d5763d1735a163ce"
+            ]
+        ]
+    },
+    {
+        "id": "8146184cc71c9197",
+        "type": "ui_button",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "group": "c3b6a787232e1a45",
+        "order": 7,
+        "width": 0,
+        "height": 0,
+        "passthru": true,
+        "label": "pH7 solution",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "",
+        "payloadType": "date",
+        "topic": "pH7",
+        "topicType": "str",
+        "x": 140,
+        "y": 180,
+        "wires": [
+            [
+                "8b4f8dc35e70eb90"
+            ]
+        ]
+    },
+    {
+        "id": "cb324c2772f36125",
+        "type": "ui_button",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "group": "c3b6a787232e1a45",
+        "order": 8,
+        "width": 0,
+        "height": 0,
+        "passthru": true,
+        "label": "pH4 solution",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "",
+        "payloadType": "date",
+        "topic": "pH4",
+        "topicType": "str",
+        "x": 140,
+        "y": 220,
+        "wires": [
+            [
+                "8b4f8dc35e70eb90"
+            ]
+        ]
+    },
+    {
+        "id": "078ac106f4282203",
+        "type": "debug",
+        "z": "73e1e8fa540bc19c",
+        "name": "debug 13",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 710,
+        "y": 490,
+        "wires": []
+    },
+    {
+        "id": "3f96b43f3e78b831",
+        "type": "ui_artlessgauge",
+        "z": "73e1e8fa540bc19c",
+        "group": "c3b6a787232e1a45",
+        "order": 1,
+        "width": "6",
+        "height": "1",
+        "name": "pH",
+        "icon": "",
+        "label": "pH",
+        "unit": "",
+        "layout": "linear",
+        "decimals": "1",
+        "differential": false,
+        "minmax": true,
+        "colorTrack": "#555555",
+        "style": "",
+        "colorFromTheme": true,
+        "property": "payload",
+        "secondary": "secondary",
+        "inline": true,
+        "animate": true,
+        "sectors": [
+            {
+                "val": 3,
+                "col": "#ff9900",
+                "t": "min",
+                "dot": 0
+            },
+            {
+                "val": 10,
+                "col": "#ff9900",
+                "t": "max",
+                "dot": 0
+            }
+        ],
+        "lineWidth": "3",
+        "bgcolorFromTheme": true,
+        "diffCenter": "",
+        "x": 690,
+        "y": 410,
+        "wires": []
+    },
+    {
+        "id": "ddda844c71f030f2",
+        "type": "comment",
+        "z": "73e1e8fa540bc19c",
+        "name": "mV from MQTT convert to pH & setpoint pH",
+        "info": "",
+        "x": 210,
+        "y": 330,
+        "wires": []
+    },
+    {
+        "id": "10149469eb4b8ea5",
+        "type": "comment",
+        "z": "73e1e8fa540bc19c",
+        "name": " pH & ORP pump control",
+        "info": "",
+        "x": 140,
+        "y": 740,
+        "wires": []
+    },
+    {
+        "id": "d711e053e9c2e121",
+        "type": "ui_artlessgauge",
+        "z": "73e1e8fa540bc19c",
+        "group": "c3b6a787232e1a45",
+        "order": 1,
+        "width": "6",
+        "height": "1",
+        "name": "ORP",
+        "icon": "",
+        "label": "ORP",
+        "unit": "",
+        "layout": "linear",
+        "decimals": "1",
+        "differential": false,
+        "minmax": true,
+        "colorTrack": "#555555",
+        "style": "",
+        "colorFromTheme": true,
+        "property": "payload",
+        "secondary": "secondary",
+        "inline": true,
+        "animate": true,
+        "sectors": [
+            {
+                "val": 0,
+                "col": "#ff9900",
+                "t": "min",
+                "dot": 0
+            },
+            {
+                "val": 1250,
+                "col": "#ff9900",
+                "t": "max",
+                "dot": 0
+            }
+        ],
+        "lineWidth": "3",
+        "bgcolorFromTheme": true,
+        "diffCenter": "",
+        "x": 230,
+        "y": 590,
+        "wires": []
+    },
+    {
+        "id": "d0f8b16df7462621",
+        "type": "mqtt in",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "Error",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10295cfb90f2e367",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 90,
+        "y": 540,
+        "wires": [
+            [
+                "806869a0961c3113"
+            ]
+        ]
+    },
+    {
+        "id": "52d2d8f14be23b7d",
+        "type": "mqtt in",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "ORPmV",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10295cfb90f2e367",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 100,
+        "y": 590,
+        "wires": [
+            [
+                "d711e053e9c2e121",
+                "729f1ed13a3e0c8c"
+            ]
+        ]
+    },
+    {
+        "id": "72af3828fcb6b621",
+        "type": "mqtt out",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "ORP/add",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "10295cfb90f2e367",
+        "x": 560,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "3998f7516c1ee4c6",
+        "type": "inject",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "on",
+        "payloadType": "str",
+        "x": 420,
+        "y": 800,
+        "wires": [
+            [
+                "72af3828fcb6b621"
+            ]
+        ]
+    },
+    {
+        "id": "a0b928f55341f0d9",
+        "type": "inject",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "off",
+        "payloadType": "str",
+        "x": 420,
+        "y": 840,
+        "wires": [
+            [
+                "72af3828fcb6b621"
+            ]
+        ]
+    },
+    {
+        "id": "e88f040e16a271c2",
+        "type": "mqtt in",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "pH/ORP",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10295cfb90f2e367",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 100,
+        "y": 670,
+        "wires": [
+            [
+                "929f0226c530b10e"
+            ]
+        ]
+    },
+    {
+        "id": "929f0226c530b10e",
+        "type": "debug",
+        "z": "73e1e8fa540bc19c",
+        "name": "debug 16",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 240,
+        "y": 670,
+        "wires": []
+    },
+    {
+        "id": "729f1ed13a3e0c8c",
+        "type": "ui_artlessgauge",
+        "z": "73e1e8fa540bc19c",
+        "group": "88342af7.aabb3",
+        "order": 5,
+        "width": "6",
+        "height": "1",
+        "name": "ORP",
+        "icon": "fa-adjust",
+        "label": "ORP",
+        "unit": "",
+        "layout": "linear",
+        "decimals": "0",
+        "differential": false,
+        "minmax": true,
+        "colorTrack": "#555555",
+        "style": "",
+        "colorFromTheme": true,
+        "property": "payload",
+        "secondary": "secondary",
+        "inline": true,
+        "animate": true,
+        "sectors": [
+            {
+                "val": 0,
+                "col": "#ff9900",
+                "t": "min",
+                "dot": 0
+            },
+            {
+                "val": 1250,
+                "col": "#ff9900",
+                "t": "max",
+                "dot": 0
+            }
+        ],
+        "lineWidth": "5",
+        "bgcolorFromTheme": true,
+        "diffCenter": "",
+        "x": 230,
+        "y": 630,
+        "wires": []
+    },
+    {
+        "id": "7d37dc8f07c7e440",
+        "type": "ui_artlessgauge",
+        "z": "73e1e8fa540bc19c",
+        "group": "88342af7.aabb3",
+        "order": 4,
+        "width": "6",
+        "height": "1",
+        "name": "pH",
+        "icon": "fa-lemon-o",
+        "label": "pH",
+        "unit": "",
+        "layout": "linear",
+        "decimals": "1",
+        "differential": false,
+        "minmax": true,
+        "colorTrack": "#555555",
+        "style": "",
+        "colorFromTheme": true,
+        "property": "payload",
+        "secondary": "secondary",
+        "inline": true,
+        "animate": true,
+        "sectors": [
+            {
+                "val": 4,
+                "col": "#ff9900",
+                "t": "min",
+                "dot": 0
+            },
+            {
+                "val": 10,
+                "col": "#ff9900",
+                "t": "max",
+                "dot": 0
+            }
+        ],
+        "lineWidth": "5",
+        "bgcolorFromTheme": true,
+        "diffCenter": "",
+        "x": 690,
+        "y": 370,
+        "wires": []
+    },
+    {
+        "id": "806869a0961c3113",
+        "type": "debug",
+        "z": "73e1e8fa540bc19c",
+        "name": "debug 17",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 220,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "2e85f88482223fc2",
+        "type": "mqtt in",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "pHmV",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10295cfb90f2e367",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 160,
+        "y": 260,
+        "wires": [
+            [
+                "8b4f8dc35e70eb90"
+            ]
+        ]
+    },
+    {
+        "id": "d433915cb07f4ea2",
+        "type": "link out",
+        "z": "73e1e8fa540bc19c",
+        "name": "link out 8",
+        "mode": "link",
+        "links": [
+            "30165c836be5d2b4"
+        ],
+        "x": 645,
+        "y": 330,
+        "wires": []
+    },
+    {
+        "id": "8e6be7c6bef5b936",
+        "type": "trigger",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "op1": "online",
+        "op2": "offline",
+        "op1type": "str",
+        "op2type": "str",
+        "duration": "30",
+        "extend": true,
+        "overrideDelay": false,
+        "units": "s",
+        "reset": "",
+        "bytopic": "all",
+        "topic": "topic",
+        "outputs": 1,
+        "x": 300,
+        "y": 970,
+        "wires": [
+            [
+                "f860f03f88807e84",
+                "fff06b5005e998ac"
+            ]
+        ]
+    },
+    {
+        "id": "0c80767e2dc0364b",
+        "type": "comment",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "info": "",
+        "x": 110,
+        "y": 910,
+        "wires": []
+    },
+    {
+        "id": "1db294517c52aee6",
+        "type": "mqtt in",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "pH/ORP",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "db8d87b45baa46fd",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 970,
+        "wires": [
+            [
+                "8e6be7c6bef5b936"
+            ]
+        ]
+    },
+    {
+        "id": "f860f03f88807e84",
+        "type": "debug",
+        "z": "73e1e8fa540bc19c",
+        "name": "debug 18",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 450,
+        "y": 970,
+        "wires": []
+    },
+    {
+        "id": "b1f35bac24263458",
+        "type": "inject",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "pH/ORP",
+        "payload": "offline",
+        "payloadType": "str",
+        "x": 130,
+        "y": 1020,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "fff06b5005e998ac",
+        "type": "ui_text",
+        "z": "73e1e8fa540bc19c",
+        "group": "88342af7.aabb3",
+        "order": 6,
+        "width": 0,
+        "height": 0,
+        "name": "pH/ORP meter",
+        "label": "pH/ORP meter",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "x": 480,
+        "y": 1010,
+        "wires": []
+    },
+    {
+        "id": "9fa77f6719ff7712",
+        "type": "mqtt in",
+        "z": "73e1e8fa540bc19c",
+        "name": "",
+        "topic": "ORPmV",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "10295cfb90f2e367",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 490,
+        "y": 710,
+        "wires": [
+            [
+                "189777f6984bd236"
+            ]
+        ]
+    },
+    {
+        "id": "189777f6984bd236",
+        "type": "link out",
+        "z": "73e1e8fa540bc19c",
+        "name": "link out 9",
+        "mode": "link",
+        "links": [
+            "b35a553fb926faa4"
+        ],
+        "x": 595,
+        "y": 710,
+        "wires": []
+    },
+    {
+        "id": "de2a452915cb991c",
+        "type": "persist-store",
+        "filename": "/mnt/dietpi_userdata/node-red/persistence.json",
+        "interval": "60"
+    },
+    {
+        "id": "10295cfb90f2e367",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "15",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "c3b6a787232e1a45",
+        "type": "ui_group",
+        "name": "pH Calibration",
+        "tab": "0de117320a681953",
+        "order": 4,
+        "disp": true,
+        "width": "6",
+        "collapse": true,
+        "className": ""
+    },
+    {
+        "id": "88342af7.aabb3",
+        "type": "ui_group",
+        "name": "Conitions of pool",
+        "tab": "afb71d0f.e96268",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "db8d87b45baa46fd",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "sessionExpiry": ""
+    },
+    {
+        "id": "0de117320a681953",
+        "type": "ui_tab",
+        "name": "Service",
+        "icon": "dashboard",
+        "order": 5,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "afb71d0f.e96268",
+        "type": "ui_tab",
+        "name": "Home",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    }
+]
